@@ -1,0 +1,41 @@
+{
+    "id": "mqttgate",
+    "description": "System MQTT gateway plugin",
+    "module": "index.js",
+    "gendevices": 0,
+    "single": 1,
+    "restartOnChannelsChange": 1,
+    "extratab": 1,
+    "nochannels": 1,
+    "channels": [],
+    "plugin_popup": [
+        {
+            "id": "import_key",
+            "type": "item",
+            "title": "Import Server KEY",
+            "command": "upload",
+            "param": "plugin_command:upload_key"
+        },
+        {
+            "id": "import_cert",
+            "type": "item",
+            "title": "Import Server CERT",
+            "command": "upload",
+            "param": "plugin_command:upload_cert"
+        },
+        {
+            "id": "import_ca",
+            "type": "item",
+            "title": "Import CA CERT",
+            "command": "upload",
+            "param": "plugin_command:upload_ca"
+        }
+    ],
+    "ext": [
+        {
+            "prop": "connection",
+            "note": "Connection to MQTT broker",
+            "vtype": "N"
+        }
+    ]
+}

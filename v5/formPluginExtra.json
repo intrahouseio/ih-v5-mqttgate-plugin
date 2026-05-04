@@ -1,0 +1,72 @@
+{
+    "grid": [
+        {
+            "id": "p1",
+            "xs": 12,
+            "class": "main",
+            "table": "unitextTable",
+            "height": "fill"
+        }
+    ],
+    "spacing": 10,
+    "p1": [
+        {
+            "title": "",
+            "type": "table",
+            "prop": "unitextTable",
+            "popupenable": true,
+            "columns": [
+                {
+                    "prop": "rootTopic",
+                    "title": "Root topic",
+                    "type": "input",
+                    "width": 250,
+                    "hide": "data.filter.id == 'device' || data.filter.id == 'tag'"
+                },
+                {
+                    "prop": "filter",
+                    "title": "Filter",
+                    "type": "droplist",
+                    "data": [
+                        {
+                            "id": "device",
+                            "title": "Device"
+                        },
+                        {
+                            "id": "location",
+                            "title": "Location"
+                        },
+                        {
+                            "id": "tag",
+                            "title": "Tag"
+                        }
+                    ],
+                    "default": "device"
+                },
+                {
+                    "prop": "did",
+                    "title": "Device",
+                    "type": "droplist",
+                    "data": "deviceList",
+                    "width": 350,
+                    "hide": "data.filter.id != 'device'"
+                },
+                {
+                    "prop": "locationStr",
+                    "title": "Location",
+                    "type": "droplist",
+                    "data": "locationList",
+                    "width": 250,
+                    "hide": "data.filter.id != 'location'"
+                },
+                {
+                    "prop": "tagStr",
+                    "title": "Tag",
+                    "type": "input",
+                    "width": 150,
+                    "hide": "data.filter.id != 'tag'"
+                }
+            ]
+        }
+    ]
+}

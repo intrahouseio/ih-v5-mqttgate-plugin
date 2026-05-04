@@ -1,0 +1,198 @@
+{
+    "grid": [
+        {
+            "id": "p1",
+            "xs": 4,
+            "class": "main",
+            "table": "units"
+        },
+        {
+            "id": "p2",
+            "xs": 4,
+            "class": "main",
+            "table": "units"
+        },
+        {
+            "id": "p3",
+            "xs": 4,
+            "class": "main",
+            "table": "units"
+        },
+        {
+            "id": "p9",
+            "xs": 12,
+            "class": "main",
+            "table": "unitsTreeTable",
+            "height": "fill"
+        }
+    ],
+    "spacing": 10,
+    "breadcrumbs": {
+        "tree": "plugins"
+    },
+    "p1": [
+        {
+            "prop": "brokerIP",
+            "title": "MQTT broker IP",
+            "type": "input",
+            "default": "127.0.0.1"
+        },
+        {
+            "prop": "brokerPort",
+            "title": "MQTT broker PORT",
+            "type": "input",
+            "default": "1883"
+        },
+        {
+            "prop": "protocol",
+            "title": "Protocol",
+            "type": "droplist",
+            "default": "mqtt",
+            "data": [
+                {
+                    "id": "mqtt",
+                    "title": "mqtt"
+                },
+                {
+                    "id": "mqtts",
+                    "title": "mqtts"
+                }
+            ]
+        },
+        {
+            "prop": "useselfsigned",
+            "title": "Use self signed sertificate",
+            "type": "cb",
+            "default": false,
+            "hide": "data.p1.protocol.id != \"mqtts\""
+        }
+    ],
+    "p2": [
+        {
+            "prop": "clientId",
+            "title": "Cluent ID",
+            "type": "input",
+            "default": ""
+        },
+        {
+            "prop": "topicsByName",
+            "title": "Topics by name",
+            "type": "cb",
+            "default": 0
+        },
+        {
+            "prop": "auth",
+            "title": "Authentification",
+            "type": "cb",
+            "default": 0
+        },
+        {
+            "prop": "username",
+            "title": "Login",
+            "type": "input",
+            "default": "admin",
+            "hide": "!data.p2.auth"
+        },
+        {
+            "prop": "password",
+            "title": "Password",
+            "type": "password",
+            "default": "password",
+            "hide": "!data.p2.auth"
+        },
+        {
+            "prop": "deviceControl",
+            "title": "Device control enable",
+            "type": "cb",
+            "default": 0
+        },
+        {
+            "prop": "dbAccess",
+            "title": "DB access",
+            "type": "cb",
+            "default": 0
+        }
+    ],
+    "p3": [
+        {
+            "prop": "restarttime",
+            "title": "$Unit_Restarttime",
+            "type": "number",
+            "default": 5
+        },
+        {
+            "prop": "loglevel",
+            "title": "$LogLevel",
+            "type": "droplist",
+            "data": "loglevelList"
+        },
+        {
+            "prop": "logsize",
+            "title": "LogSize KB",
+            "type": "number",
+            "default": 1000
+        },
+        {
+            "prop": "logrotate",
+            "title": "Log Rotate Days",
+            "type": "number",
+            "default": 7
+        },
+        {
+            "prop": "txt",
+            "title": "Comment",
+            "type": "input"
+        },
+        {
+            "prop": "debug",
+            "title": "Debug",
+            "type": "cb",
+            "default": 0
+        }
+    ],
+    "p9": [
+        {
+            "title": "",
+            "type": "table",
+            "prop": "unitsTreeTable",
+            "columns": [
+                {
+                    "prop": "name",
+                    "title": "$name",
+                    "type": "text",
+                    "width": 150
+                },
+                {
+                    "prop": "state",
+                    "title": "$state",
+                    "type": "text",
+                    "width": 150
+                },
+                {
+                    "prop": "laststart",
+                    "title": "$laststart",
+                    "type": "text",
+                    "width": 150
+                },
+                {
+                    "prop": "laststop",
+                    "title": "$laststop",
+                    "type": "text",
+                    "width": 150
+                },
+                {
+                    "prop": "uptime",
+                    "title": "$uptime",
+                    "type": "text",
+                    "width": 150
+                },
+                {
+                    "prop": "error",
+                    "title": "$error",
+                    "type": "text",
+                    "width": 250
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,6 @@
+{
+    "id":"mqttgate",
+    "description":"System MQTT gateway plugin",
+    "cross":true,
+	"version":"5.0.1"
+}
