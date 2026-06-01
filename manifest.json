@@ -3,7 +3,7 @@
     "description": "System MQTT gateway plugin",
     "module": "index.js",
     "gendevices": 0,
-    "single": 1,
+    "single": 0,
     "restartOnChannelsChange": 1,
     "extratab": 1,
     "nochannels": 1,
