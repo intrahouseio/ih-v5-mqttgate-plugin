@@ -236,13 +236,21 @@ module.exports = async function (plugin) {
                 }
             }
 
+            function checkJsonValue(value) {
+                try {
+                    return JSON.parse(value);
+                } catch (error) {
+                    return value;
+                }
+            }
+
             function updateValue(dev) {
                 const { did, prop, value, ts, chstatus } = dev;
                 const holdValue = valuemap[did];
 
                 if (!devlinks[did]) return;
 
-                if (value !== undefined) { holdValue.value = value }
+                if (value !== undefined) { holdValue.value = checkJsonValue(value) }
                 if (ts !== undefined) { holdValue.ts = ts; }
                 if (chstatus !== undefined) { holdValue.quality = chstatus; }
 
