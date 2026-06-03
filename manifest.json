@@ -3,10 +3,11 @@
     "description": "System MQTT gateway plugin",
     "module": "index.js",
     "gendevices": 0,
-    "single": 0,
+    "single": 1,
     "restartOnChannelsChange": 1,
     "extratab": 1,
     "nochannels": 1,
+    "server": "5.19.6",
     "channels": [],
     "plugin_popup": [
         {
