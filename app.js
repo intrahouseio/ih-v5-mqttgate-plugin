@@ -188,7 +188,6 @@ module.exports = async function (plugin) {
             async function devlinksInsert(fulldev, pref, link) {
                 const id = fulldev._id;
                 const dn = fulldev.dn;
-                const defValObj = { value: null, ts: null, quality: null };
 
                 let topic = pref + link;
                 let devtopic = id;
@@ -202,7 +201,16 @@ module.exports = async function (plugin) {
                 devlinks[id].push(topic + devtopic);
                 didmap[id] = fulldev;
                 dnmap[dn] = fulldev;
-                valuemap[id] = defValObj;
+
+                valuemap[id] = {}
+
+                for (let prop of Object.keys(fulldev.props)) {
+                    const initVlaue = fulldev.props[prop].value;
+                    const initTs = fulldev.props[prop].ts;
+                    const initQuality = fulldev.props[prop].quality;
+                    valuemap[id][prop] = { value: initVlaue, ts: initTs, quality: initQuality };
+                }
+
             }
 
             async function buildByLocations() {
@@ -246,10 +254,9 @@ module.exports = async function (plugin) {
 
             function updateValue(dev) {
                 const { did, prop, value, ts, chstatus } = dev;
-                const holdValue = valuemap[did];
+                if (!devlinks[did] || !valuemap[did] || !valuemap[did][prop]) return;
 
-                if (!devlinks[did]) return;
-
+                const holdValue = valuemap[did][prop];
                 if (value !== undefined) { holdValue.value = checkJsonValue(value) }
                 if (ts !== undefined) { holdValue.ts = ts; }
                 if (chstatus !== undefined) { holdValue.quality = chstatus; }
@@ -262,7 +269,7 @@ module.exports = async function (plugin) {
 
             function subOnDevices() {
                 plugin.onSub('devices', { extra: 1 }, data => {
-                    //log("onSub data: " + util.inspect(data, null, 4))
+                    //log("onSub data : " + util.inspect(data, null, 4))
                     data.forEach(item => {
                         updateValue(item)
                     });
