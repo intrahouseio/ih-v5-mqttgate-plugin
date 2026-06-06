@@ -70,7 +70,7 @@
     "p2": [
         {
             "prop": "clientId",
-            "title": "Cluent ID",
+            "title": "Client ID",
             "type": "input",
             "default": ""
         },
