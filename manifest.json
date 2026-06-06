@@ -4,6 +4,7 @@
     "module": "index.js",
     "gendevices": 0,
     "single": 1,
+    "comment": "Developed by Dmitriy Panov || https://deep-io.ru",
     "restartOnChannelsChange": 1,
     "extratab": 1,
     "nochannels": 1,
