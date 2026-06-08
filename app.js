@@ -10,13 +10,15 @@ module.exports = async function (plugin) {
     const brokerIP = plugin.params.brokerIP || '127.0.0.1';
     const brokerPort = plugin.params.brokerPort || '1883';
     const protocol = plugin.params.protocol || 'mqtt';
+    const clientId = plugin.params.clientId || "ISmqttGate";
     const useselfsigned = plugin.params.useselfsigned || false;
 
-    const clientId = plugin.params.clientId || "ISmqttGate";
     const auth = plugin.params.auth || false;
     const topicsByName = plugin.params.topicsByName || false;
     const username = plugin.params.username || "admin";
     const password = plugin.params.password || "password";
+
+    const heartbeatInt = plugin.params.heartbeatInt || 10;
     const deviceControl = plugin.params.deviceControl ? true : false;
     const dbAccess = plugin.params.dbAccess ? true : false;
 
@@ -36,7 +38,6 @@ module.exports = async function (plugin) {
             const brokerUrl = `${protocol}://${brokerIP}:${brokerPort}`;
             const willpayload = { connection: false, heartbeat: Date.now() };
             const options = { clientId: clientId, rejectUnauthorized: false, };
-            const heartbeatInt = 10000;
             const connectionStateTopic = clientId + "/status/connection";
             const commandStateTopic = clientId + "/status/command";
             const dbStateTopic = clientId + "/status/db";
@@ -47,6 +48,7 @@ module.exports = async function (plugin) {
             const deviceTopic = clientId + "/devices/";
             const tagTopic = clientId + "/tags/";
             const errorTopic = clientId + "/errors";
+            const metaTopic = clientId + "/meta";
 
             const plugindir = __dirname;
             const certdir = "cert";
@@ -64,6 +66,7 @@ module.exports = async function (plugin) {
             const foldersmap = {};
             const locationsroot = {};
             const valuemap = {};
+            const metamap = {};
 
 
             function startClient() {
@@ -83,7 +86,8 @@ module.exports = async function (plugin) {
                 process.send({ type: 'procinfo', data: { connection: 2 } });
                 log("✅ Connected", 0, false);
                 heartbeat();
-                setInterval(heartbeat, heartbeatInt);
+                //setInterval(heartbeat, heartbeatInt);
+                sentMeta();
                 send(errorTopic, {});
                 subOnDevices();
                 subscribe(commandTopic);
@@ -109,9 +113,13 @@ module.exports = async function (plugin) {
                 messageHandler(topic, message);
             }
 
-            function send(topic, message) {
-                log("SEND >> Topic: " + topic + " || Message:" + util.inspect(message), 2, true)
-                client.send(topic, message);
+            function send(topic, message, qos = 0, retain = false) {
+                try {
+                    log(`SEND >> Topic: ${topic} || Message: ${util.inspect(message)} || QOS: ${qos} || Retain: ${retain}`, 2, true)
+                    client.send(topic, message, qos, retain);
+                } catch (error) {
+                    log("Send error: " + error, 0, false);
+                }
             }
 
             function subscribe(topic) {
@@ -131,6 +139,7 @@ module.exports = async function (plugin) {
                 send(connectionStateTopic, startInd, 1, true);
                 send(commandStateTopic, commandInd);
                 send(dbStateTopic, dbInd);
+                setTimeout(heartbeat, Number(heartbeatInt) * 1000);
             }
 
             async function getOptions() {
@@ -242,6 +251,27 @@ module.exports = async function (plugin) {
                 for (let dev of devarr) {
                     await devlinksInsert(dev, deviceTopic, "")
                 }
+            }
+
+            function filterDevMeta(devmeta) {
+                if (!devmeta || !devmeta.props) return devmeta;
+
+                Object.keys(devmeta.props).forEach(propkey => {
+                    const propMeta = devmeta.props[propkey];
+                    delete propMeta.value;
+                    delete propMeta.ts;
+                    delete propMeta.chstatus;
+                });
+
+                return devmeta;
+            }
+
+            function sentMeta() {
+                Object.assign(metamap, topicsByName ? dnmap : didmap);
+                Object.keys(metamap).forEach(devkey => {
+                    const devmeta = filterDevMeta(metamap[devkey]);
+                    send(`${metaTopic}/${devkey}`, devmeta, 1, true);
+                });
             }
 
             function checkJsonValue(value) {
@@ -371,7 +401,7 @@ module.exports = async function (plugin) {
             await buildByLocations();
             await buildByTag();
             await buildByDevice();
-            startClient()
+            startClient();
 
         } catch (error) {
             log("Main proccess error: " + error, 0, false)
