@@ -2,19 +2,25 @@
     "grid": [
         {
             "id": "p1",
-            "xs": 4,
+            "xs": 3,
             "class": "main",
             "table": "units"
         },
         {
             "id": "p2",
-            "xs": 4,
+            "xs": 3,
             "class": "main",
             "table": "units"
         },
         {
             "id": "p3",
-            "xs": 4,
+            "xs": 3,
+            "class": "main",
+            "table": "units"
+        },
+        {
+            "id": "p4",
+            "xs": 3,
             "class": "main",
             "table": "units"
         },
@@ -44,6 +50,12 @@
             "default": "1883"
         },
         {
+            "prop": "clientId",
+            "title": "Client ID",
+            "type": "input",
+            "default": ""
+        },
+        {
             "prop": "protocol",
             "title": "Protocol",
             "type": "droplist",
@@ -69,18 +81,6 @@
     ],
     "p2": [
         {
-            "prop": "clientId",
-            "title": "Client ID",
-            "type": "input",
-            "default": ""
-        },
-        {
-            "prop": "topicsByName",
-            "title": "Topics by name",
-            "type": "cb",
-            "default": 0
-        },
-        {
             "prop": "auth",
             "title": "Authentification",
             "type": "cb",
@@ -99,6 +99,20 @@
             "type": "password",
             "default": "password",
             "hide": "!data.p2.auth"
+        }
+    ],
+    "p3": [
+        {
+            "prop": "heartbeatInt",
+            "title": "Heartbeat Interval, s",
+            "type": "input",
+            "default": 10
+        },
+        {
+            "prop": "topicsByName",
+            "title": "Topics by name",
+            "type": "cb",
+            "default": 0
         },
         {
             "prop": "deviceControl",
@@ -113,7 +127,7 @@
             "default": 0
         }
     ],
-    "p3": [
+    "p4": [
         {
             "prop": "restarttime",
             "title": "$Unit_Restarttime",
@@ -158,37 +172,37 @@
             "columns": [
                 {
                     "prop": "name",
-                    "title": "$name",
+                    "title": "Name",
                     "type": "text",
                     "width": 150
                 },
                 {
                     "prop": "state",
-                    "title": "$state",
+                    "title": "State",
                     "type": "text",
                     "width": 150
                 },
                 {
                     "prop": "laststart",
-                    "title": "$laststart",
+                    "title": "Laststart",
                     "type": "text",
                     "width": 150
                 },
                 {
                     "prop": "laststop",
-                    "title": "$laststop",
+                    "title": "Laststop",
                     "type": "text",
                     "width": 150
                 },
                 {
                     "prop": "uptime",
-                    "title": "$uptime",
+                    "title": "Uptime",
                     "type": "text",
                     "width": 150
                 },
                 {
                     "prop": "error",
-                    "title": "$error",
+                    "title": "Error",
                     "type": "text",
                     "width": 250
                 }
