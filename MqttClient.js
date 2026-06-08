@@ -36,7 +36,7 @@ class MqttClient extends EventEmitter {
     send(topic, message, qos = 0, retain = false) {
         const normMsg = this.checkData(message);
         if (this.client && this.client.connected && normMsg) {
-            this.client.publish(topic, normMsg, qos, retain);
+            this.client.publish(topic, normMsg, { qos, retain });
         } else {
             this.emit("error", "Filed send message!");
         }
