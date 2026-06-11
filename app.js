@@ -19,6 +19,8 @@ module.exports = async function (plugin) {
     const password = plugin.params.password || "password";
 
     const heartbeatInt = plugin.params.heartbeatInt || 10;
+    const republishInt = (plugin.params.republishInt || 60) * 1000;
+    const republishOnNewclient = plugin.params.republishOnNewclient || 0;
     const deviceControl = plugin.params.deviceControl ? true : false;
     const dbAccess = plugin.params.dbAccess ? true : false;
 
@@ -49,6 +51,7 @@ module.exports = async function (plugin) {
             const tagTopic = clientId + "/tags/";
             const errorTopic = clientId + "/errors";
             const metaTopic = clientId + "/meta";
+            const newCliTopic = '$SYS/+/new/clients';
 
             const plugindir = __dirname;
             const certdir = "cert";
@@ -67,6 +70,7 @@ module.exports = async function (plugin) {
             const locationsroot = {};
             const valuemap = {};
             const metamap = {};
+            const updatemap = {};
 
 
             function startClient() {
@@ -86,12 +90,13 @@ module.exports = async function (plugin) {
                 process.send({ type: 'procinfo', data: { connection: 2 } });
                 log("✅ Connected", 0, false);
                 heartbeat();
-                //setInterval(heartbeat, heartbeatInt);
                 sentMeta();
                 send(errorTopic, {});
                 subOnDevices();
                 subscribe(commandTopic);
                 subscribe(dbTopic);
+                subscribe(newCliTopic);
+                updatecheck();
             }
 
             function onDisconnect() {
@@ -140,6 +145,44 @@ module.exports = async function (plugin) {
                 send(commandStateTopic, commandInd);
                 send(dbStateTopic, dbInd);
                 setTimeout(heartbeat, Number(heartbeatInt) * 1000);
+            }
+
+            function repubCheck(isnewcli) {
+                const repubArr = [];
+                const ticknow = performance.now();
+                Object.keys(updatemap).forEach(did => {
+
+                    Object.keys(updatemap[did]).forEach(prop => {
+                        const didprop = `${did}_${prop}`;
+                        const lastupdate = updatemap[did][prop]["lastupdate"];
+                        if (isnewcli) {
+                            if (ticknow > lastupdate) repubArr.push(didprop);
+                        }
+                        else {
+                            const delta = ticknow - lastupdate;
+                            if (delta > republishInt) repubArr.push(didprop);
+                        }
+                    });
+
+                });
+                republish(repubArr)
+            }
+
+            function updatecheck() {
+                setInterval(() => {
+                    if (republishInt) {
+                        repubCheck(false);
+                    }
+                }, republishInt);
+            }
+
+            function republish(didarr) {
+                didarr.forEach(devprop => {
+                    const [dev, prop] = devprop.split("_");
+                    const value = valuemap[dev][prop];
+                    if (!dev || !prop || !value) return;
+                    devPropPublish(dev, prop, value);
+                })
             }
 
             async function getOptions() {
@@ -211,13 +254,19 @@ module.exports = async function (plugin) {
                 didmap[id] = fulldev;
                 dnmap[dn] = fulldev;
 
-                valuemap[id] = {}
+                valuemap[id] = {};
+                updatemap[id] = {};
 
                 for (let prop of Object.keys(fulldev.props)) {
                     const initVlaue = fulldev.props[prop].value;
                     const initTs = fulldev.props[prop].ts;
                     const initQuality = fulldev.props[prop].quality;
                     valuemap[id][prop] = { value: initVlaue, ts: initTs, quality: initQuality };
+
+                    const propType = fulldev.props[prop].op;
+                    if (propType != "cmd") {
+                        updatemap[id][prop] = { lastupdate: null };
+                    }
                 }
 
             }
@@ -284,18 +333,25 @@ module.exports = async function (plugin) {
 
             function updateValue(dev) {
                 const { did, prop, value, ts, chstatus } = dev;
-                if (!devlinks[did] || !valuemap[did] || !valuemap[did][prop]) return;
+                if (!valuemap[did] || !valuemap[did][prop]) return;
 
                 const holdValue = valuemap[did][prop];
                 if (value !== undefined) { holdValue.value = checkJsonValue(value) }
                 if (ts !== undefined) { holdValue.ts = ts; }
                 if (chstatus !== undefined) { holdValue.quality = chstatus; }
 
-                devlinks[did].forEach(topic => {
-                    send(topic + "/" + prop, holdValue);
-                })
+                devPropPublish(did, prop, holdValue);
             }
 
+            function devPropPublish(did, prop, value) {
+                if (!devlinks[did]) return;
+
+                devlinks[did].forEach(topic => {
+                    send(topic + "/" + prop, value);
+                })
+
+                updatemap[did][prop]["lastupdate"] = performance.now();
+            }
 
             function subOnDevices() {
                 plugin.onSub('devices', { extra: 1 }, data => {
@@ -350,7 +406,7 @@ module.exports = async function (plugin) {
                 let msgdata;
                 let errorstring = "";
                 try {
-                    msgdata = JSON.parse(message);
+                    msgdata = checkJsonValue(message);
                     if (topic === commandTopic) {
                         if (!deviceControl) { errorstring = "Device control disabled" }
                         else { res = command(msgdata) }
@@ -359,10 +415,18 @@ module.exports = async function (plugin) {
                         if (!dbAccess) { errorstring = "DB access disabled" }
                         else { res = await getDbData(msgdata) }
                     }
+                    if (topic.startsWith('$SYS/') && topic.endsWith('/new/clients')) {
+                        const newclientId = msgdata.toString();
+                        log("New client: " + newclientId, 0, false);
+                        if (!republishOnNewclient) return;
+                        if (newclientId !== clientId) {
+                            repubCheck(true);
+                        }
+                    }
 
                     if (!res) errorstring = "Invalid command format";
                 } catch (error) {
-                    errorstring = "Invalid JSON in command";
+                    errorstring = "Handle message error";
                     log(`Command proccessing error: ${errorstring}: ${message} || ${error}`, 0, false)
                 }
                 finally {
