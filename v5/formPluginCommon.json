@@ -109,6 +109,18 @@
             "default": 10
         },
         {
+            "prop": "republishInt",
+            "title": "Republish Interval, s",
+            "type": "input",
+            "default": 60
+        },
+        {
+            "prop": "republishOnNewclient",
+            "title": "Republish on new client connection",
+            "type": "cb",
+            "default": 1
+        },
+        {
             "prop": "topicsByName",
             "title": "Topics by name",
             "type": "cb",
