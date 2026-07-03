@@ -115,6 +115,12 @@
             "default": 60
         },
         {
+            "prop": "clearRetainOnStart",
+            "title": "Clear retain on start",
+            "type": "cb",
+            "default": 1
+        },
+        {
             "prop": "republishOnNewclient",
             "title": "Republish on new client connection",
             "type": "cb",
