@@ -1,10 +1,11 @@
 const util = require('util');
 const fs = require('fs').promises;
-const path = require('path')
-const MqttClient = require('./MqttClient')
+const path = require('path');
+const MqttClient = require('./MqttClient');
 
 
 module.exports = async function (plugin) {
+    const params = plugin.params;
     const extra = plugin.extra;
 
     const brokerIP = plugin.params.brokerIP || '127.0.0.1';
@@ -19,6 +20,7 @@ module.exports = async function (plugin) {
     const password = plugin.params.password || "password";
 
     const heartbeatInt = plugin.params.heartbeatInt || 10;
+    const clearRetainOnStart = plugin.params.clearRetainOnStart || 0;
     const republishInt = (plugin.params.republishInt || 60) * 1000;
     const republishOnNewclient = plugin.params.republishOnNewclient || 0;
     const deviceControl = plugin.params.deviceControl ? true : false;
@@ -30,19 +32,27 @@ module.exports = async function (plugin) {
         (!isDebugMsg || debug) && plugin.log(msg, level);
     }
 
+    function delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
     (async () => {
         try {
             log("App MQTTGATE is started!", 0, false);
             process.send({ type: 'procinfo', data: { connection: 1 } });
 
             let client;
+            let clearRetainFlag;
+            let clearRetainTimer;
+            let clearRetainWd;
 
             const brokerUrl = `${protocol}://${brokerIP}:${brokerPort}`;
             const willpayload = { connection: false, heartbeat: Date.now() };
-            const options = { clientId: clientId, rejectUnauthorized: false, };
+            const options = { clientId: clientId, rejectUnauthorized: false };
+            const paramsInfoTopic = clientId + "/status/paramsInfo";
+            const extraInfoTopic = clientId + "/status/extraInfo";
+            const foldersInfo = clientId + "/status/foldersInfo";
             const connectionStateTopic = clientId + "/status/connection";
-            const commandStateTopic = clientId + "/status/command";
-            const dbStateTopic = clientId + "/status/db";
             const commandTopic = clientId + "/device_command";
             const dbTopic = clientId + "/db_request";
             const dbResponseTopic = clientId + "/db_response";
@@ -62,6 +72,7 @@ module.exports = async function (plugin) {
             const locations = [];
             const tags = [];
             const devices = [];
+            const didList = [];// решает проблему многократного срабатывания при sub
 
             const devlinks = {};
             const didmap = {};
@@ -71,6 +82,9 @@ module.exports = async function (plugin) {
             const valuemap = {};
             const metamap = {};
             const updatemap = {};
+            const clearRetainTopics = [];
+            const clearRetainTimerValue = 2000;
+            const maxClearRetainTime = 20000;
 
 
             function startClient() {
@@ -80,7 +94,7 @@ module.exports = async function (plugin) {
                 client.on("connect", () => onConnect());
                 client.on("disconnect", () => onDisconnect());
                 client.on("error", (err) => onError(err));
-                client.on("data", (topic, message) => onMessage(topic, message));
+                client.on("data", (data) => onMessage(data));
                 client.on("debug", (message) => log("MQTT client debug >> " + message, 0, true));
 
                 client.connect();
@@ -89,14 +103,8 @@ module.exports = async function (plugin) {
             function onConnect() {
                 process.send({ type: 'procinfo', data: { connection: 2 } });
                 log("✅ Connected", 0, false);
-                heartbeat();
-                sentMeta();
-                send(errorTopic, {});
-                subOnDevices();
-                subscribe(commandTopic);
-                subscribe(dbTopic);
-                subscribe(newCliTopic);
-                updatecheck();
+                if (clearRetainOnStart) { clearRetain() }
+                else { mainStart() }
             }
 
             function onDisconnect() {
@@ -114,8 +122,10 @@ module.exports = async function (plugin) {
             function onMessage(data) {
                 const topic = data.topic;
                 const message = data.message;
-                log("MSG >> Topic: " + topic + " || Message:" + message, 2, true)
-                messageHandler(topic, message);
+                const qos = data.packet.qos;
+                const retain = data.packet.retain;
+                log(`MSG >> Topic: ${topic} || Message: ${message} | qos: ${qos} | retain: ${retain}`, 2, true)
+                messageHandler(topic, message, qos, retain);
             }
 
             function send(topic, message, qos = 0, retain = false) {
@@ -137,13 +147,84 @@ module.exports = async function (plugin) {
                 client.unsubscribe(topic);
             }
 
+            function mainStart() {
+                heartbeat();
+                sentMeta();
+                send(errorTopic, {});
+                subOnDevices();
+                subscribe(commandTopic);
+                subscribe(dbTopic);
+                subscribe(newCliTopic);
+                updatecheck();
+            }
+
+            async function finishClearRetain() {
+                if (!clearRetainFlag) return;
+                clearRetainFlag = false;
+                clearTimeout(clearRetainTimer);
+                clearTimeout(clearRetainWd);
+
+                unsubscribe(clientId + "/#");
+                for (let topic of clearRetainTopics) {
+                    send(topic, '', 0, true);
+                    await delay(50);
+                }
+                await delay(1000);
+                mainStart();
+            }
+
+            function restartClearRetainTimer() {
+                clearTimeout(clearRetainTimer);
+                clearRetainTimer = setTimeout(finishClearRetain, clearRetainTimerValue);
+            }
+
+            async function clearRetain() {
+                log("Clear retain data... Start after clean...", 0, false);
+                clearRetainFlag = true;
+                subscribe(clientId + "/#");
+                clearRetainWd = setTimeout(finishClearRetain, maxClearRetainTime);
+            }
+
+            function getParams() {
+                const sendParams = {};
+                if (params) {
+                    sendParams["heartbeatInt"] = params?.heartbeatInt;
+                    sendParams["republishInt"] = params?.republishInt;
+                    sendParams["clientId"] = params?.clientId;
+                    sendParams["version"] = params?.version;
+                    sendParams["clearRetainOnStart"] = params?.clearRetainOnStart;
+                    sendParams["republishOnNewclient"] = params?.republishOnNewclient;
+                    sendParams["topicsByName"] = params?.topicsByName;
+                    sendParams["deviceControl"] = params?.deviceControl;
+                    sendParams["dbAccess"] = params?.dbAccess;
+                }
+                return sendParams;
+            }
+
+            function getExtra() {
+                const sendExtra = [];
+                if (extra) {
+                    extra.forEach(extraFilter => {
+                        sendExtra.push(
+                            {
+                                filter: extraFilter?.filter,
+                                locationStr: extraFilter?.locationStr,
+                                tagStr: extraFilter?.tagStr,
+                                did: extraFilter?.did,
+                                rootTopic: extraFilter?.rootTopic
+                            }
+                        )
+                    });
+                }
+                return sendExtra;
+            }
+
             function heartbeat() {
                 const startInd = { connection: true, heartbeat: Date.now() };
-                const commandInd = { access: deviceControl };
-                const dbInd = { access: dbAccess };
                 send(connectionStateTopic, startInd, 1, true);
-                send(commandStateTopic, commandInd);
-                send(dbStateTopic, dbInd);
+                send(paramsInfoTopic, getParams(), 1, true);
+                send(extraInfoTopic, getExtra(), 1, true);
+                send(foldersInfo, foldersmap, 1, true);
                 setTimeout(heartbeat, Number(heartbeatInt) * 1000);
             }
 
@@ -153,7 +234,7 @@ module.exports = async function (plugin) {
                 Object.keys(updatemap).forEach(did => {
 
                     Object.keys(updatemap[did]).forEach(prop => {
-                        const didprop = `${did}_${prop}`;
+                        const didprop = { dev: did, prop: prop }
                         const lastupdate = updatemap[did][prop]["lastupdate"];
                         if (isnewcli) {
                             if (ticknow > lastupdate) repubArr.push(didprop);
@@ -165,7 +246,7 @@ module.exports = async function (plugin) {
                     });
 
                 });
-                republish(repubArr)
+                republish(repubArr);
             }
 
             function updatecheck() {
@@ -178,7 +259,8 @@ module.exports = async function (plugin) {
 
             function republish(didarr) {
                 didarr.forEach(devprop => {
-                    const [dev, prop] = devprop.split("_");
+                    const dev = devprop.dev;
+                    const prop = devprop.prop;
                     const value = valuemap[dev][prop];
                     if (!dev || !prop || !value) return;
                     devPropPublish(dev, prop, value);
@@ -192,10 +274,10 @@ module.exports = async function (plugin) {
                     options["password"] = password;
                 }
                 if (useselfsigned) {
-                    log("Read cetificates...", 0, false);
-                    options["key"] = await readCertFlie(KEYFILE);
-                    options["cert"] = await readCertFlie(CERTFILE);
-                    options["ca"] = await readCertFlie(CAFILE);
+                    log("Read certificates...", 0, false);
+                    options["key"] = await readCertFile(KEYFILE);
+                    options["cert"] = await readCertFile(CERTFILE);
+                    options["ca"] = await readCertFile(CAFILE);
                     options["rejectUnauthorized"] = true;
                 }
             }
@@ -207,7 +289,7 @@ module.exports = async function (plugin) {
                 }
             }
 
-            async function readCertFlie(file) {
+            async function readCertFile(file) {
                 try {
                     const filePath = path.join(plugindir, certdir, file)
                     return await fs.readFile(filePath, 'utf8');
@@ -258,10 +340,10 @@ module.exports = async function (plugin) {
                 updatemap[id] = {};
 
                 for (let prop of Object.keys(fulldev.props)) {
-                    const initVlaue = fulldev.props[prop].value;
+                    const initValue = fulldev.props[prop].value;
                     const initTs = fulldev.props[prop].ts;
                     const initQuality = fulldev.props[prop].quality;
-                    valuemap[id][prop] = { value: initVlaue, ts: initTs, quality: initQuality };
+                    valuemap[id][prop] = { value: initValue, ts: initTs, quality: initQuality };
 
                     const propType = fulldev.props[prop].op;
                     if (propType != "cmd") {
@@ -278,6 +360,7 @@ module.exports = async function (plugin) {
                         const roottopic = locationsroot[location] || "Location_" + Math.floor(Math.random() * 10000);
                         const topicpath = dev.location.replace(location, '')
                         await devlinksInsert(dev, locationTopic, `/${roottopic}${topicpath}`);
+                        if (!didList.includes(dev._id)) { didList.push(dev._id) }// решает проблему многократного срабатывания при sub
                     }
                 }
             }
@@ -286,7 +369,8 @@ module.exports = async function (plugin) {
                 for (let tag of tags) {
                     const devarr = await plugin.devices.get({ tag: tag })
                     for (let dev of devarr) {
-                        await devlinksInsert(dev, tagTopic, tag + "/")
+                        await devlinksInsert(dev, tagTopic, tag + "/");
+                        if (!didList.includes(dev._id)) { didList.push(dev._id) }// решает проблему многократного срабатывания при sub
                     }
                 }
             }
@@ -298,8 +382,28 @@ module.exports = async function (plugin) {
                 }
                 const devarr = await plugin.devices.get({ did: devdids })
                 for (let dev of devarr) {
-                    await devlinksInsert(dev, deviceTopic, "")
+                    await devlinksInsert(dev, deviceTopic, "");
+                    if (!didList.includes(dev._id)) { didList.push(dev._id) }// решает проблему многократного срабатывания при sub
                 }
+            }
+
+            function addLinksToMeta() {
+                Object.values(devlinks).forEach(links => {
+                    links.forEach(link => {
+                        const linkpath = link.split("/");
+                        const cid = linkpath[0];
+                        const pubType = linkpath[1];
+                        const dev = linkpath[linkpath.length - 1];
+                        const path = linkpath.slice(2).join("/");
+
+                        if (cid !== clientId) return;
+
+                        if (!metamap[dev].hasOwnProperty("locations")) { metamap[dev]["locations"] = [] }
+                        if (pubType === "locations") {
+                            metamap[dev]["locations"].push(path)
+                        }
+                    });
+                });
             }
 
             function filterDevMeta(devmeta) {
@@ -317,6 +421,7 @@ module.exports = async function (plugin) {
 
             function sentMeta() {
                 Object.assign(metamap, topicsByName ? dnmap : didmap);
+                addLinksToMeta();
                 Object.keys(metamap).forEach(devkey => {
                     const devmeta = filterDevMeta(metamap[devkey]);
                     send(`${metaTopic}/${devkey}`, devmeta, 1, true);
@@ -354,8 +459,9 @@ module.exports = async function (plugin) {
             }
 
             function subOnDevices() {
-                plugin.onSub('devices', { extra: 1 }, data => {
-                    //log("onSub data : " + util.inspect(data, null, 4))
+                plugin.onSub('devices', { did_prop: didList }, data => { // решает проблему многократного срабатывания при sub
+                    //plugin.onSub('devices', { extra: 1 }, data => {
+                    //log("onSub data : " + util.inspect(data, null, 4)) didList
                     data.forEach(item => {
                         updateValue(item)
                     });
@@ -372,12 +478,8 @@ module.exports = async function (plugin) {
                 const hasValue = value === undefined ? false : true;
 
                 if (!isdid) {
-                    if (dnmap.hasOwnProperty(device)) {
-                        did = dnmap[device]["_id"];
-                    }
-                    else {
-                        return false;
-                    }
+                    if (dnmap.hasOwnProperty(device)) { did = dnmap[device]["_id"] }
+                    else { return false }
                 }
 
                 const baseCommand = {
@@ -401,12 +503,19 @@ module.exports = async function (plugin) {
                 return true;
             }
 
-            async function messageHandler(topic, message) {
+            async function messageHandler(topic, message, qos, retain) {
                 let res = true;
                 let msgdata;
                 let errorstring = "";
                 try {
                     msgdata = checkJsonValue(message);
+
+                    if (clearRetainFlag && retain) {
+                        log("Clear retain topic: " + topic, 0, true);
+                        clearRetainTopics.push(topic);
+                        restartClearRetainTimer();
+                        return;
+                    }
                     if (topic === commandTopic) {
                         if (!deviceControl) { errorstring = "Device control disabled" }
                         else { res = command(msgdata) }
@@ -419,31 +528,29 @@ module.exports = async function (plugin) {
                         const newclientId = msgdata.toString();
                         log("New client: " + newclientId, 0, false);
                         if (!republishOnNewclient) return;
-                        if (newclientId !== clientId) {
-                            repubCheck(true);
-                        }
+                        if (newclientId !== clientId) repubCheck(true);
                     }
 
                     if (!res) errorstring = "Invalid command format";
                 } catch (error) {
                     errorstring = "Handle message error";
-                    log(`Command proccessing error: ${errorstring}: ${message} || ${error}`, 0, false)
+                    log(`Command proccessing error: ${errorstring}: ${topic} | ${message} || ${error}`, 0, false);
                 }
                 finally {
                     if (errorstring) {
-                        client.send(errorTopic, { command: msgdata, error: errorstring })
+                        client.send(errorTopic, { command: msgdata, error: errorstring });
                     }
                 }
             }
 
 
             function terminate() {
-                plugin.log('TERMINATE PLUGIN', 2);
+                log('TERMINATE PLUGIN', 0, false);
                 process.send({ type: 'procinfo', data: { connection: 0 } });
                 plugin.exit(100);
             }
 
-            plugin.onChange('extra', async recs => { //TODO
+            plugin.onChange('extra', data => { //TODO
                 log("Change extra subs >>> restart...", 0, false);
                 plugin.exit(2);
             })
@@ -468,7 +575,7 @@ module.exports = async function (plugin) {
             startClient();
 
         } catch (error) {
-            log("Main proccess error: " + error, 0, false)
+            log("Main process error: " + error, 0, false);
         }
     })();
 }
