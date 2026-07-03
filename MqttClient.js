@@ -17,10 +17,11 @@ class MqttClient extends EventEmitter {
             this.emit("connect");
         });
 
-        this.client.on("message", (topic, message) => {
+        this.client.on("message", (topic, message, packet) => {
             this.emit("data", {
                 topic: topic.toString(),
                 message: message.toString(),
+                packet: packet
             });
         });
 
@@ -35,7 +36,7 @@ class MqttClient extends EventEmitter {
 
     send(topic, message, qos = 0, retain = false) {
         const normMsg = this.checkData(message);
-        if (this.client && this.client.connected && normMsg) {
+        if (this.client && this.client.connected && normMsg !== false) {
             this.client.publish(topic, normMsg, { qos, retain });
         } else {
             this.emit("error", "Filed send message!");
